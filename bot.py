@@ -2,15 +2,9 @@ from cgitb import html
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Bot
 from telegram.ext import (Updater, 
-CommandHandler, CallbackContext, 
-ConversationHandler)
+CommandHandler, CallbackContext)
 
 logger = logging.getLogger(__name__)
-
-# Stages
-FIRST, SECOND, THIRD = range(3)
-# Callback data
-ONE, TWO, THREE, FOUR, FIVE = range(5)
 
 def start(update: Update, context: CallbackContext) -> int:
     """Send message on `/start`."""
