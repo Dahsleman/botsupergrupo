@@ -1,7 +1,6 @@
-from cgitb import html
 import logging
 import pip._vendor.requests 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Bot
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (Updater, 
 CommandHandler, CallbackContext)
 
@@ -27,9 +26,9 @@ def start(update: Update, context: CallbackContext) -> int:
 
 def agenda(update: Update, context: CallbackContext):
     url = f"https://postman-echo.com/post"
-    chat_id_int = update.message.chat.id
-    chat_id = str(chat_id_int)
-    headers = {'chat_id': chat_id}
+    user_id_int = update.message.from_user.id
+    user_id = str(user_id_int)
+    headers = {'user_id': user_id}
     payload = ""
     response = pip._vendor.requests.request("POST", url, headers=headers, data=payload)
     text = response.text
@@ -56,6 +55,7 @@ def main() -> None:
     updater.start_polling()
 
     updater.idle()
+
 
 if __name__ == '__main__':
     main()
