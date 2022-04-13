@@ -1,14 +1,17 @@
 import logging
-import pip._vendor.requests 
 from typing import Tuple, Optional
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Chat, ChatMember, ParseMode, ChatMemberUpdated
+import pip._vendor.requests 
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMember, ParseMode, ChatMemberUpdated
 from telegram.ext import (Updater, 
-CommandHandler, CallbackContext, MessageHandler, Filters, ChatMemberHandler)
+CommandHandler, CallbackContext, MessageHandler, Filters, ChatMemberHandler, ConversationHandler,CallbackQueryHandler)
+
 
 logger = logging.getLogger(__name__)
 
+#SEND THE USER
+
 def start(update: Update, context: CallbackContext) -> int:
-    """Send message on `/start`."""
+    """Send message on /start."""
     # Get user that sent /start and log his name
     user = update.message.from_user
     logger.info("User %s started the conversation.", user.first_name)
@@ -25,7 +28,9 @@ def start(update: Update, context: CallbackContext) -> int:
     # Send message with text and appended InlineKeyboard
     update.message.reply_text(f"Hi {user.first_name}, Please authorize me for continue to calendrive", reply_markup=reply_markup)
 
-def agenda(update: Update, context: CallbackContext):
+# SEND THE USER_ID INTO A POSTMAN SERVER
+
+def user(update: Update, context: CallbackContext):
     url = f"https://postman-echo.com/post"
     user_id_int = update.message.from_user.id
     user_id = str(user_id_int)
@@ -33,6 +38,8 @@ def agenda(update: Update, context: CallbackContext):
     response = pip._vendor.requests.request("POST", url, headers=headers)
     text = response.text
     update.message.reply_text(text)
+
+# SEND THE GROUP_ID INTO A POSTMAN SERVER
 
 def group(update: Update, context: CallbackContext):
     url = f"https://postman-echo.com/post"
@@ -42,6 +49,9 @@ def group(update: Update, context: CallbackContext):
     response = pip._vendor.requests.request("POST", url, headers=headers)
     text = response.text
     update.message.reply_text(text)
+
+
+# SAY HELLO TO A NEW CHAT MEMBER
 
 def extract_status_change(
     chat_member_update: ChatMemberUpdated,
@@ -96,27 +106,158 @@ def greet_chat_members(update: Update, context: CallbackContext) -> None:
     elif was_member and not is_member:
             return
 
+
+
+# DELET AUDIO MESSAGES IN THE GROUP_CHAT
+
+key = 'choise'
+key2 = 'message'
+
+# Stages of the ConversationHandler
+CHOISES, ACTIVE_CHOISE, INACTIVE_CHOISE = range(3)
+
+
+def delete(update: Update, context: CallbackContext):
+    keyboard = [
+        [
+            InlineKeyboardButton("Activate", callback_data='Activated'),
+            InlineKeyboardButton("Inactivate", callback_data='Inactive')
+        ],
+        [
+            InlineKeyboardButton("End", callback_data='End')
+        ],
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_text = "Forbid audio messages\n"
+    if context.user_data:
+        status = context.user_data.get(key)
+        reply_text += (f'Status: {status}')
+
+    else:
+        reply_text += (f'Status: Inactive')
+    
+    msg = context.bot.send_message(update.message.chat.id,reply_text, reply_markup=reply_markup)
+    context.user_data[key2] = msg
+
+    return CHOISES
+
+def active_choise(update: Update, context: CallbackContext):
+    query = update.callback_query
+    status = query.data
+    context.user_data[key] = status
+    msg = context.user_data.get(key2)
+    reply_text = f"Forbid audio messages\nStatus: {status}"
+    keyboard = [
+        [
+            InlineKeyboardButton("Activate", callback_data='Activated'),
+            InlineKeyboardButton("Inactivate", callback_data='Inactive')
+        ],
+        [
+            InlineKeyboardButton("End", callback_data='End')
+        ],
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    msg = context.bot.edit_message_text(reply_text, query.message.chat.id, msg.message_id, reply_markup=reply_markup)
+    context.user_data[key2] = msg
+    return ACTIVE_CHOISE
+
+def inactivate_choise(update:  Update, context: CallbackContext):
+    query = update.callback_query
+    status = query.data
+    context.user_data[key] = status
+    msg = context.user_data.get(key2)
+    reply_text = f"Forbid audio messages\nStatus: {status}"
+    keyboard = [
+        [
+            InlineKeyboardButton("Activate", callback_data='Activated'),
+            InlineKeyboardButton("Inactivate", callback_data='Inactive')
+        ],
+        [
+            InlineKeyboardButton("End", callback_data='End')
+        ],
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    msg = context.bot.edit_message_text(reply_text, query.message.chat.id, msg.message_id, reply_markup=reply_markup)
+    context.user_data[key2] = msg
+    return INACTIVE_CHOISE
+
+def delete_audio(update: Update, context: CallbackContext) -> int: 
+    chat_id = update.message.chat.id
+    must_delete = update.message
+    context.bot.deleteMessage(chat_id, 
+                        must_delete.message_id)
+    text = "audio messages arent allowed"
+    context.bot.send_message(chat_id, text)
+
+def end(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    context.user_data.clear()
+
+    # query.answer()
+    chat_id = query.message.chat.id
+    text = "audio messages are allowed"
+    context.bot.send_message(chat_id, text)
+    return ConversationHandler.END
+
+
+
+
 def main() -> None:
     """Start the bot."""
     # Create the Updater and pass it your bot's token.
-    token = '2058897666:AAG67ewdPuakUffXbAMeLBwf8hlR7KlBDXk'
-    updater = Updater(token)
+    TOKEN = '2058897666:AAG67ewdPuakUffXbAMeLBwf8hlR7KlBDXk'
+    updater = Updater(TOKEN, use_context=True)
 
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
 
     start_handler = CommandHandler('start', start)
     
-    agenda_handler = CommandHandler ('agenda', agenda)
+    user_handler = CommandHandler ('user', user)
 
     group_handler = CommandHandler ('group', group)
 
+
     # Add CommandHandler to dispatcher that will be used for handling updates
     dispatcher.add_handler(start_handler)
-    dispatcher.add_handler(agenda_handler)
+    dispatcher.add_handler(user_handler)
     dispatcher.add_handler(group_handler)
-
     dispatcher.add_handler(ChatMemberHandler(greet_chat_members, ChatMemberHandler.CHAT_MEMBER))
+
+    # using for test
+
+    conv_handler = ConversationHandler(
+        entry_points = [
+        CommandHandler('delete', delete)       
+            ],
+
+        states={
+            CHOISES:[
+                CallbackQueryHandler(active_choise, pattern='^' + 'Activated' + '$' ),
+                CallbackQueryHandler(inactivate_choise, pattern='^' + 'Inactive' + '$'),
+                ],
+            INACTIVE_CHOISE:[
+                CallbackQueryHandler(active_choise, pattern='^' + 'Activated' + '$' ),
+                CommandHandler('delete', delete) 
+                ],
+            ACTIVE_CHOISE:[
+                MessageHandler(Filters.voice, delete_audio),
+                CallbackQueryHandler(inactivate_choise, pattern='^' + 'Inactive' + '$'),
+                CommandHandler('delete', delete)
+            ]
+        },
+
+        fallbacks= [
+            CallbackQueryHandler(end, pattern='^' + 'End' + '$'),
+        ],
+
+        per_user=False,
+    )
+
+    updater.dispatcher.add_handler(conv_handler)
 
     # Start the Bot
     updater.start_polling()
