@@ -5,6 +5,22 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMem
 from telegram.ext import (Updater, 
 CommandHandler, CallbackContext, MessageHandler, Filters, ChatMemberHandler, ConversationHandler,CallbackQueryHandler)
 
+# Stages of Conv_handler
+SELECTING_ACTION, MESSAGE_DELETE_INACTIVE, MESSAGE_DELETE_ACTIVED, MESSAGE_DELETE_TIME_CHOISE, MESSAGE_DELETE_ACTIVED_TIME_CHOISE, MESSAGE_DELETE_TIME_ACTIVED = range(6)
+
+AUDIO_DELETE_ACTIVED, AUDIO_DELETE_INACTIVE = range(6,8)
+
+AUDIO_DEL_ACTIVED_MSG_DEL_ACTIVED, AUDIO_DEL_ACTIVED_MSG_DEL_INACTIVE = range(8,10) 
+
+AUDIO_DEL_ACTIVED_MSG_DEL_TIME_CHOISE = range(10,11)
+
+#Constants:
+MSG, AUDIO_DELETE_STATUS, AUDIO_DELETE_ACTIVED_STATUS, MESSAGE_DELETE_ACTIVED_STATUS, MESSAGE_DELETE_STATUS, SETINGS_MESSAGE_ID  = range(11,17)
+
+# Callback querys
+Closed, Messages, Open, Close, Set_time, Back, Activated, Inactive, Audio  = range(17,26)
+
+var_list = []
 
 logger = logging.getLogger(__name__)
 
@@ -107,101 +123,415 @@ def greet_chat_members(update: Update, context: CallbackContext) -> None:
             return
 
 
-
-# DELET AUDIO MESSAGES IN THE GROUP_CHAT
-
-key = 'choise'
-key2 = 'message'
-
-# Stages of the ConversationHandler
-CHOISES, ACTIVE_CHOISE, INACTIVE_CHOISE = range(3)
-
-
-def delete(update: Update, context: CallbackContext):
+def setings(update: Update, context: CallbackContext):
     keyboard = [
         [
-            InlineKeyboardButton("Activate", callback_data='Activated'),
-            InlineKeyboardButton("Inactivate", callback_data='Inactive')
+            InlineKeyboardButton("Opening hours", callback_data=str(Messages)),
+            InlineKeyboardButton("Audio", callback_data=str(Audio))
         ],
         [
-            InlineKeyboardButton("End", callback_data='End')
+            InlineKeyboardButton("Close", callback_data=str(Close)) 
+        ],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    keyboard_messages = [
+        [
+            InlineKeyboardButton("Opening hours", callback_data=str(Messages)),
+        ],
+        [
+            InlineKeyboardButton("Close", callback_data=str(Close)) 
+        ],
+    ]
+    reply_markup_messages = InlineKeyboardMarkup(keyboard_messages)
+    
+    reply_text = "Setings:\n"
+
+    if update.message:
+        chat_id = update.message.chat.id
+        message_id = update.message.message_id
+        context.user_data[SETINGS_MESSAGE_ID] = message_id
+        jobs = check_job_if_exists(str(chat_id), context)
+
+        if jobs == True:
+            return MESSAGE_DELETE_TIME_ACTIVED
+
+        elif context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS) and context.user_data.get(MESSAGE_DELETE_ACTIVED_STATUS):
+            reply_text += "Messages: Forbidden"
+            msg = context.bot.send_message(chat_id, reply_text, reply_markup=reply_markup_messages)
+            context.user_data[MSG] = msg
+            return AUDIO_DEL_ACTIVED_MSG_DEL_ACTIVED
+
+        elif context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS):
+            reply_text += "Audio messages: Forbidden"
+            msg = context.bot.send_message(chat_id,reply_text, reply_markup=reply_markup)
+            context.user_data[MSG] = msg
+            return AUDIO_DELETE_ACTIVED
+                
+        elif context.user_data.get(MESSAGE_DELETE_ACTIVED_STATUS):
+            reply_text += "Messages: Forbidden"
+            msg = context.bot.send_message(chat_id,reply_text, reply_markup=reply_markup_messages)
+            context.user_data[MSG] = msg
+            return MESSAGE_DELETE_ACTIVED   
+             
+        else:
+            reply_text += "Messages: Allowed"    
+            msg = context.bot.send_message(chat_id,reply_text, reply_markup=reply_markup)
+            context.user_data[MSG] = msg
+            context.user_data[MESSAGE_DELETE_ACTIVED_STATUS] = False
+            context.user_data[AUDIO_DELETE_ACTIVED_STATUS] = False
+            return SELECTING_ACTION
+
+    else:
+        query = update.callback_query
+        msg = context.user_data.get(MSG)
+        chat_id = query.message.chat.id
+
+        if context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS) and context.user_data.get(MESSAGE_DELETE_ACTIVED_STATUS):
+            reply_text += "Messages: Forbidden"
+            msg = context.bot.edit_message_text(reply_text,chat_id, msg.message_id, reply_markup=reply_markup_messages)
+            return AUDIO_DEL_ACTIVED_MSG_DEL_ACTIVED
+        
+        elif context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS):
+            reply_text += "Audio messages: Forbidden"
+            msg = context.bot.edit_message_text(reply_text,chat_id, msg.message_id, reply_markup=reply_markup)
+            return AUDIO_DELETE_ACTIVED
+
+        elif context.user_data.get(MESSAGE_DELETE_ACTIVED_STATUS):
+            reply_text += "Messages: Forbidden"
+            msg = context.bot.edit_message_text(reply_text,chat_id, msg.message_id, reply_markup=reply_markup_messages)
+            return MESSAGE_DELETE_ACTIVED
+
+        else:
+            reply_text += "Messages: Allowed"
+            msg = context.bot.edit_message_text(reply_text,chat_id, msg.message_id, reply_markup=reply_markup)
+            return SELECTING_ACTION
+
+def end_conv_handler(update: Update, context: CallbackContext) -> int:
+    context.user_data.clear()
+    chat_id = update.message.chat_id
+    reply_text = 'ConversationHandler ended'
+    context.bot.send_message(chat_id,reply_text)
+    return ConversationHandler.END
+
+def close_setings(update: Update, context: CallbackContext) -> int:
+    """Delete the keyboard buttons"""
+    query = update.callback_query
+    chat_id = query.message.chat.id
+    must_delete = query.message
+    context.bot.deleteMessage(chat_id, 
+                        must_delete.message_id)
+
+    """Delete the /setings"""
+    message_id_setings = context.user_data.get(SETINGS_MESSAGE_ID)
+    context.bot.delete_message(chat_id, message_id_setings)
+
+
+""" DELET AUDIO MESSAGES IN THE GROUP_CHAT """
+
+def audio_delete_status(update: Update, context: CallbackContext):
+    query = update.callback_query
+    chat_id = query.message.chat.id
+    msg = context.user_data.get(MSG)
+    keyboard = [
+        [
+            InlineKeyboardButton("Active", callback_data=str(Activated)),
+            InlineKeyboardButton("Inactive", callback_data=str(Inactive))
+        ],
+        [
+            InlineKeyboardButton("Back", callback_data=str(Back))
         ],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     reply_text = "Forbid audio messages\n"
-    if context.user_data:
-        status = context.user_data.get(key)
+    
+    if context.user_data.get(AUDIO_DELETE_STATUS):
+        status = context.user_data.get(AUDIO_DELETE_STATUS)
         reply_text += (f'Status: {status}')
 
     else:
         reply_text += (f'Status: Inactive')
     
-    msg = context.bot.send_message(update.message.chat.id,reply_text, reply_markup=reply_markup)
-    context.user_data[key2] = msg
+    msg = context.bot.edit_message_text(reply_text,chat_id, msg.message_id, reply_markup=reply_markup)
+    context.user_data[MSG] = msg
+    
+    if context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS):
+        return AUDIO_DELETE_ACTIVED
+    else: 
+        return AUDIO_DELETE_INACTIVE
 
-    return CHOISES
-
-def active_choise(update: Update, context: CallbackContext):
+def audio_delete_actived(update: Update, context: CallbackContext):
     query = update.callback_query
-    status = query.data
-    context.user_data[key] = status
-    msg = context.user_data.get(key2)
+    status = 'Activated'
+    context.user_data[AUDIO_DELETE_STATUS] = status
+    msg = context.user_data.get(MSG)
     reply_text = f"Forbid audio messages\nStatus: {status}"
     keyboard = [
         [
-            InlineKeyboardButton("Activate", callback_data='Activated'),
-            InlineKeyboardButton("Inactivate", callback_data='Inactive')
+            InlineKeyboardButton("Active", callback_data=str(Activated)),
+            InlineKeyboardButton("Inactive", callback_data=str(Inactive))
         ],
         [
-            InlineKeyboardButton("End", callback_data='End')
+            InlineKeyboardButton("Back", callback_data=str(Back))
         ],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     msg = context.bot.edit_message_text(reply_text, query.message.chat.id, msg.message_id, reply_markup=reply_markup)
-    context.user_data[key2] = msg
-    return ACTIVE_CHOISE
+    context.user_data[MSG] = msg
+    context.user_data[AUDIO_DELETE_ACTIVED_STATUS] = True
 
-def inactivate_choise(update:  Update, context: CallbackContext):
+    return AUDIO_DELETE_ACTIVED
+
+def audio_delete_inactive(update:  Update, context: CallbackContext):
     query = update.callback_query
-    status = query.data
-    context.user_data[key] = status
-    msg = context.user_data.get(key2)
+    status = 'Inactive'
+    context.user_data[AUDIO_DELETE_STATUS] = status
+    msg = context.user_data.get(MSG)
     reply_text = f"Forbid audio messages\nStatus: {status}"
     keyboard = [
         [
-            InlineKeyboardButton("Activate", callback_data='Activated'),
-            InlineKeyboardButton("Inactivate", callback_data='Inactive')
+            InlineKeyboardButton("Active", callback_data=str(Activated)),
+            InlineKeyboardButton("Inactive", callback_data=str(Inactive))
         ],
         [
-            InlineKeyboardButton("End", callback_data='End')
+            InlineKeyboardButton("Back", callback_data=str(Back))
         ],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     msg = context.bot.edit_message_text(reply_text, query.message.chat.id, msg.message_id, reply_markup=reply_markup)
-    context.user_data[key2] = msg
-    return INACTIVE_CHOISE
+    context.user_data[MSG] = msg
+    context.user_data[AUDIO_DELETE_ACTIVED_STATUS] = False
 
-def delete_audio(update: Update, context: CallbackContext) -> int: 
+    return AUDIO_DELETE_INACTIVE
+
+def audio_delete(update: Update, context: CallbackContext) -> int: 
     chat_id = update.message.chat.id
     must_delete = update.message
     context.bot.deleteMessage(chat_id, 
                         must_delete.message_id)
-    text = "audio messages arent allowed"
-    context.bot.send_message(chat_id, text)
 
-def end(update: Update, context: CallbackContext) -> int:
+    if context.user_data.get(MESSAGE_DELETE_ACTIVED_STATUS) == False:
+        text = "audio messages arent allowed"
+        context.bot.send_message(chat_id, text)
+
+
+"""Delete all messages in group chat"""
+
+def message_delete_status(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
-    context.user_data.clear()
-
-    # query.answer()
     chat_id = query.message.chat.id
-    text = "audio messages are allowed"
-    context.bot.send_message(chat_id, text)
-    return ConversationHandler.END
+    msg = context.user_data.get(MSG)
+    keyboard = [
+        [
+            InlineKeyboardButton("Closed", callback_data=str(Closed)),
+            InlineKeyboardButton("Open", callback_data=str(Open))
+        ],
+        [
+            InlineKeyboardButton("Set time", callback_data=Set_time)
+        ],
+        [
+            InlineKeyboardButton("Back", callback_data=str(Back))
+        ],
+    ]
 
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_text = "Set opening hours\n"
+    if context.user_data.get(MESSAGE_DELETE_STATUS):
+        status = context.user_data.get(MESSAGE_DELETE_STATUS) 
+        reply_text += (f'Status: {status}\n')
+
+    else:
+        context.user_data[MESSAGE_DELETE_STATUS] = 'Open'
+        reply_text += (f'Status: Open')
+    
+    msg = context.bot.edit_message_text(reply_text,chat_id, msg.message_id, reply_markup=reply_markup)
+    
+    context.user_data[MSG] = msg
+
+    if context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS) and context.user_data.get(MESSAGE_DELETE_ACTIVED_STATUS):
+        return AUDIO_DEL_ACTIVED_MSG_DEL_ACTIVED
+    elif context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS):
+        return AUDIO_DEL_ACTIVED_MSG_DEL_INACTIVE
+    elif context.user_data.get(MESSAGE_DELETE_ACTIVED_STATUS):   
+        return MESSAGE_DELETE_ACTIVED
+    else:
+        return MESSAGE_DELETE_INACTIVE
+
+def message_delete_actived(update: Update, context: CallbackContext):
+    query = update.callback_query
+    status = 'Closed'
+
+    context.user_data[MESSAGE_DELETE_STATUS] = status  
+    msg = context.user_data.get(MSG)
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Closed", callback_data=str(Closed)),
+            InlineKeyboardButton("Open", callback_data=str(Open))
+        ],
+        [
+            InlineKeyboardButton("Set time", callback_data=str(Set_time))
+        ],
+        [
+            InlineKeyboardButton("Back", callback_data=str(Back))
+        ],
+    ]
+
+    reply_text = f"Set opening hours\nStatus: {status}\n"
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    chat_id = query.message.chat.id
+
+    msg = context.bot.edit_message_text(reply_text, chat_id, msg.message_id, reply_markup=reply_markup)
+
+    if context.user_data[MESSAGE_DELETE_ACTIVED_STATUS] == False: 
+
+        reply_text = 'Messages sent will be deleted'
+        context.bot.send_message(chat_id,reply_text)
+    
+    context.user_data[MSG] = msg
+    context.user_data[MESSAGE_DELETE_ACTIVED_STATUS] = True
+
+    if context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS):
+        return AUDIO_DEL_ACTIVED_MSG_DEL_ACTIVED     
+    else:
+        return MESSAGE_DELETE_ACTIVED
+
+def message_delete_inactive(update:  Update, context: CallbackContext):
+    query = update.callback_query
+    status = 'Open'
+    chat_id = query.message.chat.id
+    context.user_data[MESSAGE_DELETE_STATUS] = status
+    msg = context.user_data.get(MSG)
+    reply_text = f"Set opening hours\nStatus: {status}"
+    keyboard = [
+        [
+            InlineKeyboardButton("Closed", callback_data=str(Closed)),
+            InlineKeyboardButton("Open", callback_data=str(Open))
+        ],
+        [
+            InlineKeyboardButton("Set time", callback_data=str(Set_time))
+        ],
+        [
+            InlineKeyboardButton("Back", callback_data=str(Back))
+        ],
+    ]
+    
+    remove_job_if_exists(str(chat_id), context)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    msg = context.bot.edit_message_text(reply_text, chat_id, msg.message_id, reply_markup=reply_markup)
+    
+    if context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS) and context.user_data[MESSAGE_DELETE_ACTIVED_STATUS]:
+        reply_text = 'Text messages allowed'
+        context.bot.send_message(chat_id,reply_text)
+    else: 
+        if context.user_data[MESSAGE_DELETE_ACTIVED_STATUS]:
+            reply_text = 'Messages allowed'
+            context.bot.send_message(chat_id,reply_text)
+
+    context.user_data[MSG] = msg
+    context.user_data[MESSAGE_DELETE_ACTIVED_STATUS] = False
+
+    if context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS):
+        return AUDIO_DEL_ACTIVED_MSG_DEL_INACTIVE
+    else:
+        return MESSAGE_DELETE_INACTIVE
+
+def message_delete_time(update: Update, context: CallbackContext):
+    query = update.callback_query
+    msg = context.user_data.get(MSG)
+    reply_text = f"Set time for deleting messages"
+    keyboard = [
+        [
+            InlineKeyboardButton("5s", callback_data=str(Activated))
+        ],
+        [
+            InlineKeyboardButton("Back", callback_data=str(Back))
+        ],
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    msg = context.bot.edit_message_text(reply_text, query.message.chat.id, msg.message_id, reply_markup=reply_markup)
+
+    if context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS) and context.user_data.get(MESSAGE_DELETE_ACTIVED_STATUS):
+        return MESSAGE_DELETE_ACTIVED_TIME_CHOISE
+
+    elif context.user_data.get(AUDIO_DELETE_ACTIVED_STATUS):  
+        return AUDIO_DEL_ACTIVED_MSG_DEL_TIME_CHOISE
+
+    elif context.user_data.get(MESSAGE_DELETE_ACTIVED_STATUS):
+        return MESSAGE_DELETE_ACTIVED_TIME_CHOISE
+
+    else:
+        return MESSAGE_DELETE_TIME_CHOISE
+
+
+def message_delete_time_active(update: Update, context: CallbackContext):
+    query = update.callback_query
+
+    chat_id = query.message.chat.id
+    msg = context.user_data.get(MSG)
+      
+    remove_job_if_exists(str(chat_id), context)
+
+    context.job_queue.run_once(send_message_job, 5, context=chat_id, name=str(chat_id))
+
+    context.bot.deleteMessage(chat_id, 
+                        msg.message_id)
+
+    reply_text = "Messages arent allowed for the next 5 seconds"
+    context.bot.send_message(chat_id, reply_text)
+
+    context.user_data[MESSAGE_DELETE_ACTIVED_STATUS] = False
+    context.user_data[MESSAGE_DELETE_STATUS] = "Open"
+
+    return MESSAGE_DELETE_TIME_ACTIVED
+  
+
+def send_message_job(context: CallbackContext):
+    job = context.job
+    context.bot.send_message(job.context, text='Messages are allowed')
+    var = 'teste'
+    var_list.append(var)
+
+def remove_job_if_exists(name: str,context: CallbackContext):
+    """Remove job with given name. Returns whether job was removed."""
+    current_jobs = context.job_queue.get_jobs_by_name(name)
+    if not current_jobs:
+        return False
+    for job in current_jobs:
+        var_list.clear()
+        job.schedule_removal()
+    return True
+
+def check_job_if_exists(name: str,context: CallbackContext):
+    current_jobs = context.job_queue.get_jobs_by_name(name)
+    if not current_jobs:
+        return False
+    else:
+        return True
+
+def delete_messages_job(update: Update, context: CallbackContext) -> int: 
+
+    if var_list != []:
+        var_list.clear()
+        if context.user_data[AUDIO_DELETE_ACTIVED_STATUS]:
+            return AUDIO_DELETE_ACTIVED
+        else:
+            return SELECTING_ACTION
+    chat_id = update.message.chat.id
+    must_delete = update.message
+    context.bot.deleteMessage(chat_id, 
+                        must_delete.message_id)
+
+def message_delete(update: Update, context: CallbackContext) -> int: 
+    chat_id = update.message.chat.id
+    must_delete = update.message
+    context.bot.deleteMessage(chat_id, 
+                        must_delete.message_id)    
 
 
 
@@ -228,36 +558,96 @@ def main() -> None:
     dispatcher.add_handler(ChatMemberHandler(greet_chat_members, ChatMemberHandler.CHAT_MEMBER))
 
     # using for test
-
     conv_handler = ConversationHandler(
-        entry_points = [
-        CommandHandler('delete', delete)       
-            ],
 
+        entry_points = [
+            CommandHandler('setings', setings),    
+            ],
         states={
-            CHOISES:[
-                CallbackQueryHandler(active_choise, pattern='^' + 'Activated' + '$' ),
-                CallbackQueryHandler(inactivate_choise, pattern='^' + 'Inactive' + '$'),
-                ],
-            INACTIVE_CHOISE:[
-                CallbackQueryHandler(active_choise, pattern='^' + 'Activated' + '$' ),
-                CommandHandler('delete', delete) 
-                ],
-            ACTIVE_CHOISE:[
-                MessageHandler(Filters.voice, delete_audio),
-                CallbackQueryHandler(inactivate_choise, pattern='^' + 'Inactive' + '$'),
-                CommandHandler('delete', delete)
-            ]
+            SELECTING_ACTION:[
+            CallbackQueryHandler(audio_delete_status, pattern='^' + str(Audio) + '$'),
+            CallbackQueryHandler(message_delete_status, pattern='^' + str(Messages) + '$'),
+            CommandHandler('setings', setings),
+            CallbackQueryHandler(close_setings, pattern='^' + str(Close) + '$'),
+            ],
+            MESSAGE_DELETE_INACTIVE:[
+                CallbackQueryHandler(message_delete_actived, pattern='^' + str(Closed) + '$'),
+                CallbackQueryHandler(message_delete_time, pattern='^' + str(Set_time) + '$'), 
+                CallbackQueryHandler(message_delete_status, pattern='^' + str(Messages) + '$'),
+                CallbackQueryHandler(setings, pattern='^' + str(Back) + '$'),
+                CommandHandler('setings', setings),
+            ],        
+            MESSAGE_DELETE_ACTIVED:[
+                MessageHandler(~Filters.command, message_delete),
+                CallbackQueryHandler(message_delete_inactive, pattern='^' + str(Open) + '$'),
+                CallbackQueryHandler(message_delete_time, pattern='^' + str(Set_time) + '$'), 
+                CallbackQueryHandler(message_delete_status, pattern='^' + str(Messages) + '$'),
+                CallbackQueryHandler(setings, pattern='^' + str(Back) + '$'),
+                CommandHandler('setings', setings),
+                CallbackQueryHandler(close_setings, pattern='^' + str(Close) + '$'),          
+            ],
+            MESSAGE_DELETE_TIME_CHOISE: [
+                CallbackQueryHandler(message_delete_status, pattern='^' + str(Back) + '$'),
+                CallbackQueryHandler(message_delete_time_active, pattern='^' + str(Activated) + '$'),
+                CommandHandler('setings', setings),
+            ],  
+            MESSAGE_DELETE_ACTIVED_TIME_CHOISE:[
+                MessageHandler(~Filters.command, message_delete),
+                CallbackQueryHandler(message_delete_status, pattern='^' + str(Back) + '$'),
+                CallbackQueryHandler(message_delete_time_active, pattern='^' + str(Activated) + '$'),
+                CommandHandler('setings', setings),
+            ],
+            AUDIO_DELETE_INACTIVE:[
+                CallbackQueryHandler(audio_delete_status, pattern='^' + str(Audio) + '$'),
+                CallbackQueryHandler(audio_delete_actived, pattern='^' + str(Activated) + '$' ),
+                CallbackQueryHandler(setings, pattern='^' + str(Back) + '$'), 
+                CommandHandler('setings', setings),            
+            ],
+            AUDIO_DELETE_ACTIVED:[
+                MessageHandler(Filters.voice, audio_delete),
+                CallbackQueryHandler(audio_delete_status, pattern='^' + str(Audio) + '$'),
+                CallbackQueryHandler(audio_delete_inactive, pattern='^' + str(Inactive) + '$'),
+                CallbackQueryHandler(setings, pattern='^' + str(Back) + '$'),
+                CommandHandler('setings', setings),
+                CallbackQueryHandler(message_delete_status, pattern='^' + str(Messages) + '$'),
+                CallbackQueryHandler(close_setings, pattern='^' + str(Close) + '$'),
+            ],
+            AUDIO_DEL_ACTIVED_MSG_DEL_INACTIVE:[
+                MessageHandler(Filters.voice, audio_delete),
+                CallbackQueryHandler(message_delete_actived, pattern='^' + str(Closed) + '$'),
+                CallbackQueryHandler(message_delete_time, pattern='^' + str(Set_time) + '$'),
+                CallbackQueryHandler(setings, pattern='^' + str(Back) + '$'),
+                CommandHandler('setings', setings),
+            ],
+            AUDIO_DEL_ACTIVED_MSG_DEL_ACTIVED:[ 
+                MessageHandler(~Filters.command, message_delete),
+                CallbackQueryHandler(message_delete_status, pattern='^' + str(Messages) + '$'),
+                CallbackQueryHandler(message_delete_inactive, pattern='^' + str(Open) + '$'),
+                CallbackQueryHandler(message_delete_time, pattern='^' + str(Set_time) + '$'),
+                CallbackQueryHandler(setings, pattern='^' + str(Back) + '$'),
+                CallbackQueryHandler(close_setings, pattern='^' + str(Close) + '$'),
+                CommandHandler('setings', setings),
+            ],
+            AUDIO_DEL_ACTIVED_MSG_DEL_TIME_CHOISE:[
+                MessageHandler(Filters.voice, audio_delete),
+                CallbackQueryHandler(message_delete_status, pattern='^' + str(Back) + '$'),
+                CallbackQueryHandler(message_delete_time_active, pattern='^' + str(Activated) + '$'),
+                CommandHandler('setings', setings),
+            ],
+            MESSAGE_DELETE_TIME_ACTIVED:[
+                CommandHandler('setings', setings),
+                MessageHandler(~Filters.command, delete_messages_job),
+            ],        
         },
 
         fallbacks= [
-            CallbackQueryHandler(end, pattern='^' + 'End' + '$'),
+           CommandHandler('end', end_conv_handler),   
         ],
-
-        per_user=False,
+        per_user=False
     )
-
+  
     updater.dispatcher.add_handler(conv_handler)
+
 
     # Start the Bot
     updater.start_polling()
