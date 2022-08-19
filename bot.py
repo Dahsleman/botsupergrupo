@@ -1678,6 +1678,9 @@ def main() -> None:
                           url_path=TOKEN)
     updater.bot.setWebhook('https://calendrive.herokuapp.com/' + TOKEN)
     updater.idle()
+    
+if __name__=="__main__":
+    main()
 
 
 
