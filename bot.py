@@ -8,6 +8,9 @@ from typing import Tuple, Optional, cast, List
 from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
 
+import os
+PORT = int(os.environ.get('PORT', 5000))
+
 # Stages of Conv_handler:
 (SETTINGS_MENU, OPENING_HOURS_MENU, SET_DAYS_AND_OPEN_CLOSE_TIME, VOICE_MENU,  
 SET_TIME_ZONE, TIME_ZONE_MENU, CHANGE_TIME_ZONE_IN_PRIVATE) = range(7)
@@ -1670,7 +1673,10 @@ def main() -> None:
   
     dispatcher.add_handler(conv_handler)
 
-    updater.start_polling()
+    updater.start_webhook(listen="0.0.0.0",
+                          port=int(PORT),
+                          url_path=TOKEN)
+    updater.bot.setWebhook('https://calendrive.herokuapp.com/' + TOKEN)
     updater.idle()
 
 
