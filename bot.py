@@ -91,13 +91,7 @@ def track_chats(update: Update, context: CallbackContext) -> None:
     # Handle chat types differently:
     if chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
         if cause_member_status == ChatMember.CREATOR:
-            if not was_member_admin and is_member_admin:
-                context.bot_data.setdefault(user_id, set()).add(chat.id)
-                
-            elif was_member_admin and not is_member_admin:
-                context.bot_data.setdefault(user_id, set()).discard(chat.id)
-
-            elif bot_status == ChatMember.MEMBER:
+            if bot_status == ChatMember.MEMBER:
                 bot = context.bot
                 url = helpers.create_deep_linked_url(bot.username, ADD_AS_MEMBER)
                 text = (
@@ -109,10 +103,14 @@ def track_chats(update: Update, context: CallbackContext) -> None:
                 )
                 context.bot.send_message(chat_id=chat.id, text=text, reply_markup=keyboard, disable_notification=True)
                 context.bot.leave_chat(chat.id)
-       
-        elif cause_member_status == ChatMember.ADMINISTRATOR:
+            else:
+                if not was_member_admin and is_member_admin:
+                    context.bot_data.setdefault(user_id, set()).add(chat.id)
+                    
+                elif was_member_admin and not is_member_admin:
+                    context.bot_data.setdefault(user_id, set()).discard(chat.id)   
+        else: 
             context.bot.leave_chat(chat.id)
-
     else:
         context.bot.leave_chat(chat.id)
 
