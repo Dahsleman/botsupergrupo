@@ -9,7 +9,7 @@ from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
 
 import os
-PORT = int(os.environ.get('PORT', 5000))
+PORT = int(os.environ.get('PORT', 8443))
 
 # Stages of Conv_handler:
 (SETTINGS_MENU, OPENING_HOURS_MENU, SET_DAYS_AND_OPEN_CLOSE_TIME, VOICE_MENU,  
@@ -1675,8 +1675,8 @@ def main() -> None:
 
     updater.start_webhook(listen="0.0.0.0",
                           port=int(PORT),
-                          url_path=TOKEN)
-    updater.bot.setWebhook('https://calendrive.herokuapp.com/' + TOKEN)
+                          url_path=TOKEN,
+                        webhook_url='https://calendrive.herokuapp.com/' + TOKEN)
     updater.idle()
     
 if __name__=="__main__":
