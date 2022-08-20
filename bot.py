@@ -9,7 +9,7 @@ from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
 
 import os
-PORT = int(os.environ.get('PORT', 8443))
+PORT = int(os.environ.get('PORT', 80))
 
 # Stages of Conv_handler:
 (SETTINGS_MENU, OPENING_HOURS_MENU, SET_DAYS_AND_OPEN_CLOSE_TIME, VOICE_MENU,  

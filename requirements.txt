@@ -2,3 +2,4 @@ python-telegram-bot
 timezonefinder
 geopy
 telegram
+requests
