@@ -1676,7 +1676,7 @@ def main() -> None:
     updater.start_webhook(listen="0.0.0.0",
                           port=int(PORT),
                           url_path=TOKEN,
-                        webhook_url='https://calendrive.herokuapp.com/' + TOKEN)
+                        webhook_url='https://supergroups.herokuapp.com/' + TOKEN)
     updater.idle()
     
 if __name__=="__main__":
