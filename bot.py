@@ -247,7 +247,7 @@ def settings(update: Update, context: CallbackContext):
                     context.chat_data[VOICE_DELETE_STATUS_ACTIVED] = False
                     context.chat_data[OPENING_HOURS_STATUS_OPEN] = True
                     context.chat_data[FIRST_TIME_SETTINGS_MENU] = True
-                    time_zone_str=get_localzone()
+                    time_zone_str='America/Sao_Paulo'
                     time_zone = pytz.timezone(time_zone_str)
                     context.chat_data[TIME_ZONE] = time_zone
                     context.bot_data.update({chat.id:time_zone_str})
