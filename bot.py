@@ -7,6 +7,7 @@ import datetime, pytz, logging, tzlocal
 from typing import Tuple, Optional, cast, List
 from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
+from tzlocal import get_localzone
 
 import os
 PORT = int(os.environ.get('PORT', 80))
@@ -181,6 +182,9 @@ def settings(update: Update, context: CallbackContext):
         user_id = update.message.from_user.id
         chat = update.effective_chat 
         bot_id = update.message.bot.id
+        context.chat_data[SETTINGS_MESSAGE_ID] = message_id
+        context.user_data[USER_ID] = user_id
+
     else:
         query = update.callback_query
         query.answer()
@@ -189,6 +193,8 @@ def settings(update: Update, context: CallbackContext):
         user_id = query.from_user.id
         bot_id = query.message.bot.id
         
+    chat_member = context.bot.get_chat_member(chat.id,user_id)
+    chat_member_status = chat_member.status    
     if chat.type == Chat.PRIVATE:
         if user_id not in context.bot_data:
             text='There is no group to /settings available. Make sure that you add me in your group as an admin member' 
@@ -212,9 +218,6 @@ def settings(update: Update, context: CallbackContext):
             return
 
     else:
-        chat_member = context.bot.get_chat_member(chat.id,user_id)
-        chat_member_status = chat_member.status
-
         if chat_member_status != ChatMember.CREATOR:
             context.bot.send_message(chat_id=chat.id, text='I only respond to ChatMember CREATOR', disable_notification=True)
             return
@@ -227,7 +230,34 @@ def settings(update: Update, context: CallbackContext):
                 text = 'You must put me as chat administrator to use /settings'
                 context.bot.send_message(chat_id=chat.id, text=text, disable_notification=True)
 
-            else:
+            else:            
+                if context.chat_data.get(FIRST_TIME_SETTINGS_MENU) == True:
+                    time_zone_str = context.bot_data.get(chat.id)
+                    time_zone = pytz.timezone(time_zone_str)
+                    context.chat_data[TIME_ZONE] = time_zone
+                    date_time_now = datetime.datetime.now(time_zone)
+                    context.chat_data[CHAT_DATE_TIME_NOW] = date_time_now
+                    current_time = date_time_now.strftime("%d/%m/%Y %H:%M")
+                    context.chat_data[CHAT_CURRENT_TIME] = current_time
+                    weekday_number = int(date_time_now.strftime("%w"))  
+                    context.chat_data[OPENING_HOURS_WEEKDAY_NUMBER] = weekday_number
+                else:
+                    context.chat_data[FIRST_TIME_OPENING_HOURS_MENU] = True
+                    context.chat_data[FIRST_TIME_VOICE_MENU] = True
+                    context.chat_data[VOICE_DELETE_STATUS_ACTIVED] = False
+                    context.chat_data[OPENING_HOURS_STATUS_OPEN] = True
+                    context.chat_data[FIRST_TIME_SETTINGS_MENU] = True
+                    time_zone_str=get_localzone()
+                    time_zone = pytz.timezone(time_zone_str)
+                    context.chat_data[TIME_ZONE] = time_zone
+                    context.bot_data.update({chat.id:time_zone_str})
+                    date_time_now = datetime.datetime.now(time_zone)
+                    context.chat_data[CHAT_DATE_TIME_NOW] = date_time_now
+                    current_time = date_time_now.strftime("%d/%m/%Y %H:%M")
+                    context.chat_data[CHAT_CURRENT_TIME] = current_time
+                    weekday_number = int(date_time_now.strftime("%w"))  
+                    context.chat_data[OPENING_HOURS_WEEKDAY_NUMBER] = weekday_number
+
                 keyboard = [
                 [
                     InlineKeyboardButton("Opening hours", callback_data=str(Opening_hours_menu)),
@@ -246,35 +276,6 @@ def settings(update: Update, context: CallbackContext):
 
                 reply_text = "Settings:\n" 
                 if update.message:       
-                    context.chat_data[SETTINGS_MESSAGE_ID] = message_id
-                    context.user_data[USER_ID] = user_id
-
-                    if context.chat_data.get(FIRST_TIME_SETTINGS_MENU) == True:
-                        time_zone_str = context.bot_data.get(chat.id)
-                        time_zone = pytz.timezone(time_zone_str)
-                        context.chat_data[TIME_ZONE] = time_zone
-                        date_time_now = datetime.datetime.now(time_zone)
-                        context.chat_data[CHAT_DATE_TIME_NOW] = date_time_now
-                        current_time = date_time_now.strftime("%d/%m/%Y %H:%M")
-                        context.chat_data[CHAT_CURRENT_TIME] = current_time
-                        weekday_number = int(date_time_now.strftime("%w"))  
-                        context.chat_data[OPENING_HOURS_WEEKDAY_NUMBER] = weekday_number
-                    else:
-                        context.chat_data[FIRST_TIME_OPENING_HOURS_MENU] = True
-                        context.chat_data[FIRST_TIME_VOICE_MENU] = True
-                        context.chat_data[VOICE_DELETE_STATUS_ACTIVED] = False
-                        context.chat_data[OPENING_HOURS_STATUS_OPEN] = True
-                        context.chat_data[FIRST_TIME_SETTINGS_MENU] = True
-                        time_zone_str=tzlocal.get_localzone_name()
-                        time_zone = pytz.timezone(time_zone_str)
-                        context.chat_data[TIME_ZONE] = time_zone
-                        context.bot_data.update({chat.id:time_zone_str})
-                        date_time_now = datetime.datetime.now(time_zone)
-                        context.chat_data[CHAT_DATE_TIME_NOW] = date_time_now
-                        current_time = date_time_now.strftime("%d/%m/%Y %H:%M")
-                        context.chat_data[CHAT_CURRENT_TIME] = current_time
-                        weekday_number = int(date_time_now.strftime("%w"))  
-                        context.chat_data[OPENING_HOURS_WEEKDAY_NUMBER] = weekday_number
                     
                     if context.chat_data[VOICE_DELETE_STATUS_ACTIVED] == True and context.chat_data[OPENING_HOURS_STATUS_OPEN] == False:
                         
@@ -299,9 +300,6 @@ def settings(update: Update, context: CallbackContext):
                     return SETTINGS_MENU
 
                 else:
-                    chat_member = context.bot.get_chat_member(chat.id,user_id)
-                    chat_member_status = chat_member.status
-
                     if chat_member_status != ChatMember.CREATOR:
                         query.answer(text='You must be ChatMember CREATOR')
                         return

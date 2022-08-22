@@ -3,3 +3,4 @@ timezonefinder
 geopy
 telegram
 requests
+tzlocal
